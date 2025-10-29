@@ -2,9 +2,15 @@ from bs4 import BeautifulSoup
 from openai import OpenAI
 import base64
 import tiktoken
-client = OpenAI()
-model = "gpt-4o"
+from pydantic import BaseModel, Field
+import json
 
+#local
+from src.utils import LoggingTool
+logger = LoggingTool.get_logger(__name__)
+
+client = OpenAI()
+model = "gpt-4o-2024-08-06"
 
 def encode_image(image_path:str):
     with open(image_path, "rb") as image_file:
@@ -32,43 +38,44 @@ def whether_to_crawl(image_path:str):
         bool_response = True
     elif response.output_text.lower() == "false":
         bool_response = False
-
+        
+    logger.info(f"whether_to_crawl = {bool_response}")
     return bool_response
 
-def class_from_instruction(source:str, instruction:str) -> dict:
-    text_prompt = f"""
-    # return tag or class in html SOURCE according to INSTRUCTION below follwing the FORMAT
-    
-    ## INSTRUCTION:
-    {instruction}
-    
-    ## SOURCE:
-    {source}
-    
-    ## FORMAT: json
-    {{"name": "", "class_": ""}}
-    
-    ## requirements
-    - follow the json format: put the name of tag in 'name' and the name of class in 'class_'
-    - if there is no appropriate value for json, just leave it ""(blank string)
-    - if you're hesitate to put value, just leave it ""(blank string)
-    """
-    response = client.responses.create(
-        model="gpt-4o",
+class TagClass(BaseModel):
+    name: str = Field(description="the name of tag in html source")
+    class_: str = Field(description="the name of class in html source")
 
+def class_from_instruction(source:str, instruction:str) -> dict:
+    response = client.responses.parse(
+        model=model,
         input=[
+            {"role": "system", "content": "# return tag or class in html SOURCE according to INSTRUCTION below follwing the FORMAT"},
             {
                 "role": "user",
-                "content": [
-                    { "type": "input_text", "text": text_prompt }
-                ],
-            }
+                "content": """
+                ## INSTRUCTION:
+                {instruction}
+                
+                ## SOURCE:
+                {source}
+                
+                ## requirements
+                - follow the json format: put  in 'name' and the name of class in 'class_'
+                - if there is no appropriate value for json, just leave it ""(blank string)
+                - if you're hesitate to put value, just leave it ""(blank string)
+                """,
+            },
         ],
+        text_format=TagClass,
     )
+    logger.info(f"response.output_text: {response.output_text}")
+    if response.output_text:
+        response_dict = json.loads(response.output_text)
+    else:
+        response_dict = {"name": "", "class_": ""}
     
-    # TODO:put outputfixingparser here
-    
-    return response.output_text
+    return response_dict
 
 def get_token_count(text: str, model=model):
     """토큰 수 계산"""
@@ -81,7 +88,7 @@ def trim_source(source:str, max_tokens:int) -> list[list[str]]:
     sections = list()
     token_num = 0
     
-    for tag in soup.find_all(['section', 'article', 'div', 'table', 'ul', 'ol', 'p']):
+    for tag in soup.find_all(lambda tag: tag.string and "리뷰" in tag.string):
         token_count = get_token_count(str(tag))
         if (token_num + token_count) > max_tokens:
             total_sections.append("\n\n".join(sections))
@@ -90,6 +97,7 @@ def trim_source(source:str, max_tokens:int) -> list[list[str]]:
         else:
             sections += [str(tag)]
             token_num += token_count
+    total_sections.append("\n\n".join(sections))
     return total_sections
 
 def get_classes(source:str, instruction:str, max_tokens:int) -> list[dict]:
