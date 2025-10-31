@@ -2,8 +2,8 @@ from langchain.tools import tool
 import os
 import urllib.request
 import requests
-import chardet
-import json
+import xml.etree.ElementTree as ET
+import re
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -34,26 +34,33 @@ def naver_book(search_word:str, display:int=3) -> dict:
     result = response_to_request(request=request)
     return result
 
-def isbn_search(isbn:str) -> dict:
-    national_library_api_key = os.getenv("NATIONAL_LIBRARY_API_KEY")
-    url = f"https://www.nl.go.kr/seoji/SearchApi.do?cert_key={national_library_api_key}&result_style=json&page_no=1&page_size=10&isbn={isbn}"
-    request = urllib.request.Request(url)
-    result = response_to_request(request=request)
-    return result
-
-# @tool
-def get_table_of_contents(isbn:str) -> str:
-    result = isbn_search(isbn)
-    result = json.loads(result)
-    table_of_contents_url = result["docs"][0]["BOOK_TB_CNT_URL"]
-    response = requests.get(table_of_contents_url) #
-    detected = chardet.detect(response.content)
-    text = response.content.decode(detected['encoding'], errors='ignore')
-    return text
+def aladin_search(query:str):
+    url = "http://www.aladin.co.kr/ttb/api/ItemSearch.aspx"
+    params = {
+        "ttbkey": os.getenv("ALADIN_API_KEY"),
+        "Query": query,
+        "QueryType": "Title",
+        "MaxResults": 10,
+        "start": 1,
+        "SearchTarget": "Book",
+        "output": "xml",
+    }
+    response = requests.get(url, params=params)
+    # XML 파싱
+    tree = ET.ElementTree(ET.fromstring(response.content))
+    root = tree.getroot()
+    namespace_uri = re.match(r"\{(.+?)\}", root.tag).group(1)
+    ns = {"ns": namespace_uri} # 네임스페이스 추출
+    
+    for item in root.findall(f".//ns:item", ns):
+        print("="*100)
+        title = item.find("ns:title", ns); print(title.text)
+        description = item.find("ns:description", ns); print(description.text)
+        title = item.find("ns:title", ns); print(title.text)
     
 if __name__ == "__main__":
-    result = naver_book(search_word="떡볶이", display=3)
-    print(result)
+    # result = naver_book(search_word="떡볶이", display=3)
+    # print(result)
     
-    table_of_contents = get_table_of_contents(isbn="9791196394509")
-    print(table_of_contents)
+    result = aladin_search(query="떡볶이")
+    print(result)
