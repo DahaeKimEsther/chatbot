@@ -76,14 +76,18 @@ def aladin_search_api(params:dict, output_keys:list[str]) -> dict:
 
     for output_key in output_keys_else:
         result[output_key] = content_dict[output_key] 
-    result["item"] = [
-                        {
-                            k: v
-                            for k, v in a_dict.items()
-                            if k in output_keys_item
-                        }
-                        for a_dict in content_dict["item"]
-                    ]
+        
+    if "item" in content_dict:
+        result["item"] = [
+                            {
+                                k: v
+                                for k, v in a_dict.items()
+                                if k in output_keys_item
+                            }
+                            for a_dict in content_dict["item"]
+                        ]
+    else:
+        pass
     
     return result
     
