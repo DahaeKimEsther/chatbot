@@ -75,19 +75,21 @@ def aladin_search_api(params:dict, output_keys:list[str]) -> dict:
             output_keys_else.append(output_key)
 
     for output_key in output_keys_else:
-        result[output_key] = content_dict[output_key] 
+        result[output_key] = content_dict[output_key]
         
     if "item" in content_dict:
+        item = content_dict["item"]
+        if isinstance(item, dict):
+            item:list[dict] = [item]
+        
         result["item"] = [
                             {
                                 k: v
                                 for k, v in a_dict.items()
                                 if k in output_keys_item
                             }
-                            for a_dict in content_dict["item"]
+                            for a_dict in item
                         ]
-    else:
-        pass
     
     return result
     
@@ -95,14 +97,18 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
     
-    params = {
-        "ttbkey": os.getenv("ALADIN_API_KEY"),
-        "Query": "떡볶이",
-        "QueryType": "Title",
-        "MaxResults": 10,
-        "start": 1,
-        "SearchTarget": "Book",
-        "output": "xml",
-    }
-    result = aladin_search_api(params=params, output_keys=["link", "item.title", "item.author", "item.description"])
+    # params = {
+    #     "ttbkey": os.getenv("ALADIN_API_KEY"),
+    #     "Query": "떡볶이",
+    #     "QueryType": "Title",
+    #     "MaxResults": 10,
+    #     "start": 1,
+    #     "SearchTarget": "Book",
+    #     "output": "xml",
+    # }
+    # result = aladin_search_api(params=params, output_keys=["link", "item.title", "item.author", "item.description"])
+    # print(result)
+    
+    params = {"query": "천문학"}
+    result = naver_book_api(params=params) # discount
     print(result)
