@@ -1,51 +1,22 @@
-from pydantic import BaseModel, Field
-from typing import Literal
 from langchain.tools import tool
 import os
 from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
 
-from src.utils import aladin_search_api
+from src.utils import aladin_search_api, naver_book_api
+from src.schema import AladinBookSearchParams, NaverBookSearchParams, KeywordAnswer
 load_dotenv()
 
-class BookSearchParams(BaseModel):
-    """Params for book_search"""
-    Query: str = Field(description="검색어")
-    QueryType: Literal["Keyword", "Title", "Author", "Publisher"] = Field(
-        default="Keyword",
-        description="""##검색방식의 유형
-        Keyword (기본값) : 제목+저자
-        Title : 제목검색
-        Author : 저자검색
-        Publisher : 출판사검색
-        """
-    )
-    SearchTarget:Literal["Book", "Used"] = Field(
-        default="Book",
-        description="""##쿼리를 검색할 mall
-        Book (기본값): 도서
-        Used : 중고샵(도서/음반/DVD 등)
-        """
-    )
-    Sort:Literal["Accuracy", "PublishTime", "Title", "SalesPoint", "CustomerRating", "MyReviewCount"] = Field("""## 정렬순서
-    Accuracy(기본값): 관련도
-    PublishTime : 출간일
-    Title : 제목
-    SalesPoint : 판매량
-    CustomerRating 고객평점
-    MyReviewCount :마이리뷰갯수
-    """
-    )
-    
-class BookSearch(BaseModel):
-    """input of book_search"""
-    params: dict = Field(description="parameters from book_params")
-
-@tool(args_schema=BookSearchParams)
-def book_search(Query:str,
+@tool(args_schema=AladinBookSearchParams)
+def basic_book_search(Query:str,
                 QueryType:str="Keyword",
                 SearchTarget:str="Book",
                 Sort:str="Accuracy"):
     """search books according to parameters
+
+        Available Response:
+        link, title, author, pubdate
+        
     """
     input_params = locals()
     fixed_params = {
@@ -58,3 +29,44 @@ def book_search(Query:str,
     output_keys = ["link", "item.title", "item.link", "item.author", "item.pubdate"]
     result = aladin_search_api(params, output_keys)
     return result
+
+@tool(args_schema=NaverBookSearchParams)
+def price_description_book_search(query:str,
+                sort:str="sim",
+                d_titl:str | None = None,
+                d_isbn:str | None = None):
+    """search books according to parameters
+    
+        Available Response
+        discount(lowest price of book), description
+    """
+    params = locals()
+    result = naver_book_api(params)
+    result_items = [{ k:v for k, v in item.items() if k in ["title", "discount", "description"]} for item in result["items"]]
+    return result_items
+
+@tool
+def keyword_generator(search_query:str):
+    """
+    keyword maker to generate keywords related to question that user made so that user can get recommended books by searching keywords in book store's web page
+    """
+    model = ChatOpenAI(model="gpt-4o-mini")
+    structured_model = model.with_structured_output(schema=KeywordAnswer)
+    messages = [
+        (
+            "system",
+            "You are keyword maker to generate keywords related to question that user made so that you can recommend books by searching keywords in book store's web page",
+        ),
+        ("human", search_query),
+    ]
+    result = structured_model.invoke(input=messages)
+    return result
+
+if __name__ == "__main__":
+    # # keyword generator test
+    # result = keyword_generator.invoke({"search_query": "천문학을 배우고 싶은데 어떤 책이 좋을까?"})
+    # print(result)
+    
+    # price description test
+    result = price_description_book_search.invoke({"query": "천문학"})
+    print(result)
