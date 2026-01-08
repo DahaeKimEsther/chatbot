@@ -16,6 +16,7 @@ dependencies = [
     "dotenv (>=0.9.9,<0.10.0)",
     "xmltodict (>=1.0.2,<2.0.0)",
     "langchain-openai (>=1.0.1,<2.0.0)",
+    "langgraph (>=1.0.5,<2.0.0)",
 ]
 
 

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
 from src.utils import aladin_search_api, naver_book_api
-from src.schema import AladinBookSearchParams, NaverBookSearchParams, KeywordAnswer
+from src.tool_schema import AladinBookSearchParams, NaverBookSearchParams, KeywordAnswer
 load_dotenv()
 
 @tool(args_schema=AladinBookSearchParams)
