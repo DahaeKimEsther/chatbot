@@ -3,14 +3,15 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command, Send
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.prebuilt import ToolNode, tools_condition
 
-from src.schema import OverallState, FeatureClassification, ToolRouting
+from src.schema import OverallState, FeatureClassification
 from src.tool import basic_book_search, price_description_book_search
-from src.tool_schema import AladinBookSearchParams, NaverBookSearchParams
 
 llm = ChatOpenAI(model="gpt-5.2")
+book_search_tool_node = ToolNode([basic_book_search, price_description_book_search])
 
-def classify_intent(state: OverallState) -> Command[Literal["book_search", "book_recommendation", "introduce_features"]]:
+def classify_intent(state: OverallState) -> Command[Literal["book_search"]]: # , "book_recommendation", "introduce_features"]
     """Use LLM to classify book search intent"""
     structured_llm = llm.with_structured_output(FeatureClassification)
 
@@ -26,70 +27,27 @@ def classify_intent(state: OverallState) -> Command[Literal["book_search", "book
     classification = structured_llm.invoke(classification_prompt)
     if classification["intent"] == "book_search":
         goto = "book_search"
-    elif classification["intent"] == "book_recommendation":
-        goto = "book_recommendation"
-    else:
-        goto = "introduce_features"
+    # elif classification["intent"] == "book_recommendation":
+    #     goto = "book_recommendation"
+    # else:
+    #     goto = "introduce_features"
 
     return Command(
-        update={"classification": classification},
+        update={
+            "classification": classification,
+            "messages": [HumanMessage(content=classification["query_related_to_intent"])]
+        },
         goto=goto,
     )
 
 
-def book_search(state: OverallState) -> Command[Literal["basic_book_search", "price_description_book_search"]]:
+def book_search(state: OverallState) -> dict:
     """LLM이 어느 tool 노드로 갈지, 혹은 둘 다 갈지 결정."""
-    structured_llm = llm.with_structured_output(ToolRouting)
+    model_with_tools = llm.bind_tools([basic_book_search, price_description_book_search])
+    
     query = state['classification']['query_related_to_intent']
-
-    routing = structured_llm.invoke([
-        SystemMessage(content=(
-            "Decide which search tool(s) to use:\n"
-            "- basic_book_search: general book info (title, author, rating, etc.)\n"
-            "- price_description_book_search: lowest price or book description needed\n"
-            "You can choose one or both."
-        )),
-        HumanMessage(content=query),
-    ]) # routing 출력값 schema: ToolRouting
-
-    if len(routing.tools) == 1:
-        return Command(goto=routing.tools[0])
-
-    # 둘 다 선택된 경우 → 병렬 실행
-    return Command(goto=[Send(tool, state) for tool in routing.tools])
-
-
-def run_basic_book_search(state: OverallState) -> Command[Literal["draft_response"]]:
-    structured_llm = llm.with_structured_output(AladinBookSearchParams)
-    query = state['classification']['query_related_to_intent']
-
-    params = structured_llm.invoke([
-        SystemMessage(content="Extract Aladin book search parameters from the user query."),
-        HumanMessage(content=query),
-    ])
-
-    result = basic_book_search.invoke(params.model_dump())
-    return Command(
-        update={"search_results": [{"tool": "basic_book_search", "data": result}]},
-        goto="draft_response",
-    )
-
-
-def run_price_description_book_search(state: OverallState) -> Command[Literal["draft_response"]]:
-    structured_llm = llm.with_structured_output(NaverBookSearchParams)
-    query = state['classification']['query_related_to_intent']
-
-    params = structured_llm.invoke([
-        SystemMessage(content="Extract Naver book search parameters from the user query."),
-        HumanMessage(content=query),
-    ])
-
-    result = price_description_book_search.invoke(params.model_dump())
-    return Command(
-        update={"search_results": [{"tool": "price_description_book_search", "data": result}]},
-        goto="draft_response",
-    )
-
+    response = model_with_tools.invoke(state["messages"])
+    return {"messages": [response]}
 
 # TODO: 구현 필요
 def book_recommendation(_state: OverallState) -> Command[Literal["draft_response"]]:
@@ -101,14 +59,10 @@ def introduce_features(_state: OverallState) -> Command[Literal["draft_response"
 
 
 def draft_response(state: OverallState):
-    query = state['classification']['query_related_to_intent']
-    search_results = state.get('search_results', [])
-
     response = llm.invoke([
         SystemMessage(content="You are a helpful book assistant. Answer the user's question based on the search results provided."),
-        HumanMessage(content=f"User query: {query}\n\nSearch results: {search_results}"),
+        *state["messages"],  # tool 결과(ToolMessage)가 여기 있음
     ])
-
     return {"draft_response": response.content}
 
 
@@ -117,13 +71,14 @@ builder = StateGraph(OverallState)
 
 builder.add_node("classify_intent", classify_intent)
 builder.add_node("book_search", book_search)
-builder.add_node("basic_book_search", run_basic_book_search)
-builder.add_node("price_description_book_search", run_price_description_book_search)
-builder.add_node("book_recommendation", book_recommendation)
-builder.add_node("introduce_features", introduce_features)
+builder.add_node("book_search_tool_node", book_search_tool_node)
+# builder.add_node("book_recommendation", book_recommendation)
+# builder.add_node("introduce_features", introduce_features)
 builder.add_node("draft_response", draft_response)
 
 builder.add_edge(START, "classify_intent")
+builder.add_conditional_edges("book_search", tools_condition, {"tools": "book_search_tool_node", END: "draft_response"})
+builder.add_edge("book_search_tool_node", "book_search")
 builder.add_edge("draft_response", END)
 
 graph = builder.compile()
