@@ -44,9 +44,8 @@ def classify_intent(state: OverallState) -> Command[Literal["book_search"]]: # ,
 def book_search(state: OverallState) -> dict:
     """LLM이 어느 tool 노드로 갈지, 혹은 둘 다 갈지 결정."""
     model_with_tools = llm.bind_tools([basic_book_search, price_description_book_search])
-    
-    query = state['classification']['query_related_to_intent']
-    response = model_with_tools.invoke(state["messages"])
+    messages = state["messages"]
+    response = model_with_tools.invoke(messages)
     return {"messages": [response]}
 
 # TODO: 구현 필요
