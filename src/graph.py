@@ -6,12 +6,13 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from src.schema import OverallState, FeatureClassification
-from src.tool import basic_book_search, price_description_book_search
+from src.tool import basic_book_search, price_description_book_search, keyword_generator
 
 llm = ChatOpenAI(model="gpt-5.2")
 book_search_tool_node = ToolNode([basic_book_search, price_description_book_search])
+book_recommendation_tool_node = ToolNode([basic_book_search, keyword_generator])
 
-def classify_intent(state: OverallState) -> Command[Literal["book_search"]]: # , "book_recommendation", "introduce_features"]
+def classify_intent(state: OverallState) -> Command[Literal["book_search", "book_recommendation"]]: # , "book_recommendation", "introduce_features"]
     """Use LLM to classify book search intent"""
     structured_llm = llm.with_structured_output(FeatureClassification)
 
@@ -27,8 +28,8 @@ def classify_intent(state: OverallState) -> Command[Literal["book_search"]]: # ,
     classification = structured_llm.invoke(classification_prompt)
     if classification["intent"] == "book_search":
         goto = "book_search"
-    # elif classification["intent"] == "book_recommendation":
-    #     goto = "book_recommendation"
+    elif classification["intent"] == "book_recommendation":
+        goto = "book_recommendation"
     # else:
     #     goto = "introduce_features"
 
@@ -36,6 +37,7 @@ def classify_intent(state: OverallState) -> Command[Literal["book_search"]]: # ,
         update={
             "classification": classification,
             "messages": [HumanMessage(content=classification["query_related_to_intent"])]
+            # 추후 의도가 여러 개인 요청사항이 오면 의도별로 나눠서 HummanMessage 저장
         },
         goto=goto,
     )
@@ -48,9 +50,12 @@ def book_search(state: OverallState) -> dict:
     response = model_with_tools.invoke(messages)
     return {"messages": [response]}
 
-# TODO: 구현 필요
-def book_recommendation(_state: OverallState) -> Command[Literal["draft_response"]]:
-    return Command(update={}, goto="draft_response")
+def book_recommendation(state: OverallState) -> dict:
+    """LLM이 어느 tool 노드로 갈지, 혹은 둘 다 갈지 결정."""
+    model_with_tools = llm.bind_tools([basic_book_search, keyword_generator])
+    messages = state["messages"]
+    response = model_with_tools.invoke(messages)
+    return {"messages": [response]}
 
 
 def introduce_features(_state: OverallState) -> Command[Literal["draft_response"]]:
@@ -65,25 +70,27 @@ def draft_response(state: OverallState):
     return {"draft_response": response.content}
 
 
-# ---- Graph 조립 ----
+# ---- Graph ----
 builder = StateGraph(OverallState)
 
+#NODE
 builder.add_node("classify_intent", classify_intent)
 builder.add_node("book_search", book_search)
 builder.add_node("book_search_tool_node", book_search_tool_node)
-# builder.add_node("book_recommendation", book_recommendation)
+builder.add_node("book_recommendation", book_recommendation)
+builder.add_node("book_recommendation_tool_node", book_recommendation_tool_node)
 # builder.add_node("introduce_features", introduce_features)
 builder.add_node("draft_response", draft_response)
 
+# EDGE
 builder.add_edge(START, "classify_intent")
-builder.add_conditional_edges("book_search", tools_condition, {"tools": "book_search_tool_node", END: "draft_response"})
+# 1. book_search agent
+builder.add_conditional_edges("book_search", tools_condition, {"tools": "book_search_tool_node", "__end__": "draft_response"})
 builder.add_edge("book_search_tool_node", "book_search")
+# 2. book_recommendation agent
+builder.add_conditional_edges("book_recommendation", tools_condition, {"tools": "book_recommendation_tool_node", "__end__": "draft_response"})
+builder.add_edge("book_recommendation_tool_node", "book_recommendation")
 builder.add_edge("draft_response", END)
 
+#GRAPH
 graph = builder.compile()
-
-if __name__ == "__main__":
-    from PIL import Image
-    import io
-    image_bytes = graph.get_graph().draw_mermaid_png()
-    Image.open(io.BytesIO(image_bytes)).show()
