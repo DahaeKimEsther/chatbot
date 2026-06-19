@@ -1,12 +1,18 @@
+import os
 from typing import Literal
+from dotenv import load_dotenv, find_dotenv
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command
+import psycopg
+from langgraph.checkpoint.postgres import PostgresSaver
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from src.schema import OverallState, IntentClassifications
 from src.tool import basic_book_search, price_description_book_search, keyword_generator
+
+load_dotenv(find_dotenv())
 
 llm = ChatOpenAI(model="gpt-5.2")
 book_search_tool_node = ToolNode([basic_book_search, price_description_book_search])
@@ -123,4 +129,12 @@ builder.add_edge("book_recommendation_tool_node", "book_recommendation")
 builder.add_edge("draft_response", END)
 
 #GRAPH
-graph = builder.compile()
+_conn_string = (
+    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
+    f"@localhost:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB')}"
+)
+_conn = psycopg.Connection.connect(_conn_string, autocommit=True)
+_checkpointer = PostgresSaver(_conn)
+_checkpointer.setup()
+
+graph = builder.compile(checkpointer=_checkpointer)

@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:17.6
+    container_name: bookchatbot-postgres
+    environment:
+      - TZ=Asia/Seoul
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports: 
+      - ${POSTGRES_PORT}:5432
+    healthcheck:
+      # test: ["CMD", "pg_isready", "-U", "postgres"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql    
+      - ./postgres/data:/var/lib/postgresql/data
+    restart: unless-stopped
