@@ -2,8 +2,8 @@ from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 from langchain.tools import tool
 
-from src.tool import basic_book_search, price_description_book_search, keyword_generator, book_memo_analyzer
-from src.tool_schema import BookMemoRecord
+from .tool import basic_book_search, price_description_book_search, keyword_generator, book_memo_analyzer
+from .tool_schema import BookMemoRecord
 model = ChatOpenAI(model="gpt-5.2")
 
 BOOK_SEARCH_AGENT_PROMPT = (

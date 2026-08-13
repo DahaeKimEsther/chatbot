@@ -1,7 +1,7 @@
 import uuid
 import streamlit as st
 from langchain_core.messages import HumanMessage
-from src.graph import graph
+from book_chatbot.graph import graph
 from db import save_message, load_messages, get_threads
 
 def show_chat():

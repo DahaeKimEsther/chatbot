@@ -1,8 +1,8 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from src.agent import book_memo_agent, book_memo
-from src.tool_schema import BookMemoRecord
+from book_chatbot.agent import book_memo_agent, book_memo
+from book_chatbot.tool_schema import BookMemoRecord
 
 
 def test_book_memo_agent():

@@ -1,6 +1,5 @@
 import os
 from typing import Literal
-from dotenv import load_dotenv, find_dotenv
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command
 import psycopg
@@ -9,10 +8,12 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import ToolNode, tools_condition
 
-from src.schema import OverallState, IntentClassifications
-from src.tool import basic_book_search, price_description_book_search, keyword_generator
+from dotenv import load_dotenv
 
-load_dotenv(find_dotenv())
+from .schema import OverallState, IntentClassifications
+from .tool import basic_book_search, price_description_book_search, keyword_generator
+
+load_dotenv()
 
 llm = ChatOpenAI(model="gpt-5.2")
 book_search_tool_node = ToolNode([basic_book_search, price_description_book_search])

@@ -93,6 +93,8 @@ def aladin_search_api(params:dict, output_keys:list[str]) -> dict:
     
     return result
     
+# 이 블록은 python -m book_chatbot.utils 로 실행해야 합니다.
+# 파일을 직접 실행하면(python src/book_chatbot/utils.py) 상대 임포트가 깨집니다.
 if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
