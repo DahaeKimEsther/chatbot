@@ -49,3 +49,17 @@ class NaverBookSearchParams(BaseModel):
 
 class KeywordAnswer(BaseModel):
     keywords: list[str]
+
+class BookInfo(BaseModel):
+    title: str = Field(description="도서명")
+    author: str = Field(description="저자")
+    publisher: str = Field(description="출판사")
+    isbn: str = Field(description="ISBN")
+
+class ReadingMemo(BaseModel):
+    pages_read: int = Field(description="읽은 페이지")
+    impression: str = Field(description="감상")
+
+class BookMemoRecord(BaseModel):
+    book: BookInfo
+    memo: ReadingMemo

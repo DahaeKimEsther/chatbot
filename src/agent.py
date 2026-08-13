@@ -2,7 +2,8 @@ from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 from langchain.tools import tool
 
-from src.tool import basic_book_search, price_description_book_search, keyword_generator
+from src.tool import basic_book_search, price_description_book_search, keyword_generator, book_memo_analyzer
+from src.tool_schema import BookMemoRecord
 model = ChatOpenAI(model="gpt-5.2")
 
 BOOK_SEARCH_AGENT_PROMPT = (
@@ -15,6 +16,15 @@ BOOK_KEYWORD_RECOMMEND_AGENT_PROMPT = (
     "If user asks you to recommend books, then use keyword generator according to natural language of user and execute book search using those keywords generated"
 )
 
+BOOK_MEMO_AGENT_PROMPT = (
+    "The user's message is a memo about a book they are reading. "
+    "1) Identify the book title mentioned in the message and call basic_book_search to look it up. "
+    "From the search result, determine the book's title(도서명), author(저자), publisher(출판사) and ISBN. "
+    "2) Call book_memo_analyzer with the user's original message to extract how many pages they've "
+    "read(읽은 페이지) and their impression(감상). "
+    "3) Combine the book info and the memo info into the final structured record."
+)
+
 book_search_agent = create_agent(
     model,
     tools=[basic_book_search, price_description_book_search], # naver_book_api
@@ -23,8 +33,15 @@ book_search_agent = create_agent(
 
 book_keyword_recommend_agent = create_agent(
     model,
-    tools=[basic_book_search, keyword_generator], # naver_book_api
+    tools=[basic_book_search, keyword_generator],
     system_prompt=BOOK_KEYWORD_RECOMMEND_AGENT_PROMPT,
+)
+
+book_memo_agent = create_agent(
+    model,
+    tools=[basic_book_search, book_memo_analyzer],
+    system_prompt=BOOK_MEMO_AGENT_PROMPT,
+    response_format=BookMemoRecord,
 )
 
 @tool
@@ -56,16 +73,42 @@ def book_recommendation(request: str) -> str:
     })
     return result["messages"][-1].text
 
+@tool
+def book_memo(request: str) -> str:
+    """
+    Record a reading memo for a book: the book's info (title, author, publisher, ISBN)
+    together with the user's reading progress (pages read) and impression.
+
+    Use this when the user writes a note about a book they are reading — mentioning the
+    book title along with how far they've read and/or their thoughts/impressions.
+
+    Input: Natural language memo mentioning the book title, pages read, and impression
+    """
+    result = book_memo_agent.invoke({
+        "messages": [{"role": "user", "content": request}]
+    })
+    record: BookMemoRecord = result["structured_response"]
+    return (
+        f"도서명: {record.book.title}\n"
+        f"저자: {record.book.author}\n"
+        f"출판사: {record.book.publisher}\n"
+        f"ISBN: {record.book.isbn}\n"
+        f"읽은 페이지: {record.memo.pages_read}\n"
+        f"감상: {record.memo.impression}"
+    )
+
 SUPERVISOR_PROMPT = (
     "You are a helpful book assistant. "
-    "You can search books or recommend books according to user request"
+    "You can search books, recommend books, or record a reading memo according to user request. "
+    "Use book_memo when the user writes a note about a book they are reading, mentioning the book "
+    "title together with how many pages they've read and/or their thoughts or impressions about it. "
     "Break down user requests into appropriate tool calls and coordinate the results. "
     "When a request involves multiple actions, use multiple tools in sequence."
 )
 
 supervisor_agent = create_agent(
     model,
-    tools=[book_search, book_recommendation],
+    tools=[book_search, book_recommendation, book_memo],
     system_prompt=SUPERVISOR_PROMPT,
 )
 

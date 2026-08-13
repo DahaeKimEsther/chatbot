@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
 from src.utils import aladin_search_api, naver_book_api
-from src.tool_schema import AladinBookSearchParams, NaverBookSearchParams, KeywordAnswer
+from src.tool_schema import AladinBookSearchParams, NaverBookSearchParams, KeywordAnswer, ReadingMemo
 load_dotenv()
 
 @tool(args_schema=AladinBookSearchParams)
@@ -15,8 +15,8 @@ def basic_book_search(Query:str,
     """search books according to parameters
 
         Available Response:
-        link, title, author, pubdate
-        
+        link, title, author, pubdate, publisher, isbn13
+
     """
     input_params = locals()
     fixed_params = {
@@ -26,7 +26,7 @@ def basic_book_search(Query:str,
         "output": "xml",
     }
     params = {**input_params, **fixed_params}
-    output_keys = ["link", "item.title", "item.link", "item.author", "item.pubdate"]
+    output_keys = ["link", "item.title", "item.link", "item.author", "item.pubdate", "item.publisher", "item.isbn13"]
     result = aladin_search_api(params, output_keys)
     return result
 
@@ -58,6 +58,28 @@ def keyword_generator(search_query:str):
             "You are keyword maker to generate keywords related to question that user made so that you can recommend books by searching keywords in book store's web page",
         ),
         ("human", search_query),
+    ]
+    result = structured_model.invoke(input=messages)
+    return result
+
+@tool
+def book_memo_analyzer(memo_text:str):
+    """
+    Analyze a user's reading memo and extract how many pages they have read
+    and their impression/thoughts about the book.
+
+        Available Response:
+        pages_read (읽은 페이지), impression (감상)
+    """
+    model = ChatOpenAI(model="gpt-4o")
+    structured_model = model.with_structured_output(schema=ReadingMemo)
+    messages = [
+        (
+            "system",
+            "Extract how many pages the user has read (읽은 페이지) and their impression or "
+            "thoughts about the book (감상) from the memo they wrote.",
+        ),
+        ("human", memo_text),
     ]
     result = structured_model.invoke(input=messages)
     return result
