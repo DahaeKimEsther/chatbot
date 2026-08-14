@@ -8,12 +8,8 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import ToolNode, tools_condition
 
-from dotenv import load_dotenv
-
 from .schema import OverallState, IntentClassifications
 from .tool import basic_book_search, price_description_book_search, keyword_generator
-
-load_dotenv()
 
 llm = ChatOpenAI(model="gpt-5.2")
 book_search_tool_node = ToolNode([basic_book_search, price_description_book_search])

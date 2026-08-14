@@ -1,6 +1,3 @@
-from dotenv import load_dotenv
-load_dotenv()
-
 from book_chatbot.agent import book_memo_agent, book_memo
 from book_chatbot.tool_schema import BookMemoRecord
 

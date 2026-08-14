@@ -2,11 +2,8 @@ from langchain.tools import tool
 import os
 from langchain_openai import ChatOpenAI
 
-from dotenv import load_dotenv
-
 from .utils import aladin_search_api, naver_book_api
 from .tool_schema import AladinBookSearchParams, NaverBookSearchParams, KeywordAnswer, ReadingMemo
-load_dotenv()
 
 @tool(args_schema=AladinBookSearchParams)
 def basic_book_search(Query:str,
