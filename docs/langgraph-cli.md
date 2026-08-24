@@ -6,14 +6,12 @@
 conda activate chatbot
 ```
 2. 실행경로
-* langgraph.json이 있는 경로여야 함
-```
-cd projects/chatbot
-```
+* book_chatbot_manual 자체를 기본 workspace 경로로 가정함
+* langgraph.json이 있는 경로
 
 3. Docker(Postgres) 실행
 ```
-docker compose -f docker/docker-compose.yaml up -d
+docker compose --env-file ./.env -f docker/docker-compose.yaml up -d
 ```
 * `src/book_chatbot/graph.py`에서 체크포인터가 `localhost:5432` Postgres에 연결함
 * 이게 안 켜져 있으면 `langgraph dev` 실행 시 `connection timeout expired` 에러로 서버가 죽음
