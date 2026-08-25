@@ -26,6 +26,8 @@ dependencies = [
     "uvicorn (>=0.52.1,<0.53.0)",
 ]
 
+[tool.poetry]
+packages = [{ include = "book_chatbot", from = "src" }]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.1.1"
