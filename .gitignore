@@ -13,3 +13,9 @@ docker/postgres
 # 에디터/도구 산출물
 # Markdown Preview Enhanced가 워크스페이스에 자동 생성하는 설정 스캐폴드
 .crossnote/
+
+# pytest 캐시
+.pytest_cache/
+
+# 가상 환경
+.venv*/
